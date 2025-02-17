@@ -6,4 +6,6 @@ seaborn
 plotly
 scikit-learn
 google-genai
-python-dotenv 
+python-dotenv
+fpdf
+kaleido 

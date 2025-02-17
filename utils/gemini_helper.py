@@ -2,16 +2,23 @@ from google import genai
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
+from dotenv import load_dotenv
 
 class GeminiAnalyzer:
     def __init__(self, df):
         self.df = df
         self.df_info = self._get_df_info()
         
-        # Initialize Gemini API using Streamlit secrets
-        api_key = st.secrets["GOOGLE_API_KEY"]
+        # Try to get API key from Streamlit secrets first, then from environment
+        try:
+            api_key = st.secrets["GOOGLE_API_KEY"]
+        except:
+            load_dotenv()
+            api_key = os.getenv('GOOGLE_API_KEY')
+            
         if not api_key:
-            raise ValueError("GOOGLE_API_KEY not found in Streamlit secrets")
+            raise ValueError("GOOGLE_API_KEY not found in environment variables or Streamlit secrets")
         
         self.client = genai.Client(api_key=api_key)
 
