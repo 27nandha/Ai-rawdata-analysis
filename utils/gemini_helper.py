@@ -162,36 +162,30 @@ class GeminiAnalyzer:
         except Exception as e:
             return f"Error analyzing data: {str(e)}"
 
-    def suggest_visualization(self, columns):
+    def suggest_visualization(self, columns, custom_prompt=None):
         """Suggest appropriate visualization types for given columns"""
         try:
-            # Get data types and sample statistics for selected columns
-            column_stats = {
-                col: {
-                    'dtype': str(self.df[col].dtype),
-                    'unique_values': len(self.df[col].unique()),
-                    'has_nulls': self.df[col].isnull().any(),
-                    'sample_values': self.df[col].head(3).tolist()
-                } for col in columns
-            }
-            
-            prompt = f"""
-            Given these columns from the dataset: {columns}
-            Column Details: {column_stats}
-            
-            Suggest the most appropriate type of visualization(s) from these options:
-            - Histogram
-            - Scatter Plot
-            - Bar Plot
-            - Box Plot
-            - Line Plot
-            - Correlation Heatmap
-            
-            For each suggested visualization:
-            1. Explain why it's appropriate for this data
-            2. What insights it could reveal
-            3. Any potential limitations or considerations
-            """
+            if custom_prompt:
+                prompt = custom_prompt
+            else:
+                # Use the default prompt...
+                prompt = f"""
+                Given these columns from the dataset: {columns}
+                Column Details: {self.df[columns].dtypes.to_dict()}
+                
+                Suggest the most appropriate type of visualization(s) from these options:
+                - Histogram
+                - Scatter Plot
+                - Bar Plot
+                - Box Plot
+                - Line Plot
+                - Correlation Heatmap
+                
+                For each suggested visualization:
+                1. Explain why it's appropriate for this data
+                2. What insights it could reveal
+                3. Any potential limitations or considerations
+                """
             
             response = self.client.models.generate_content(
                 model="gemini-pro",

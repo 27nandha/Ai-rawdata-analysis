@@ -5,11 +5,8 @@ from sklearn.impute import KNNImputer
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from utils.gemini_helper import GeminiAnalyzer
-from fpdf import FPDF
-import plotly.express as px
-import io
-from datetime import datetime
-import os
+from utils.report_generator import ReportGenerator
+import base64
 
 def get_ai_insights(df):
     """Get AI insights about data quality issues"""
@@ -62,92 +59,9 @@ def clean_dataset(df):
     
     return cleaned_df
 
-def create_analysis_pdf(df, cleaned_df, insights, visualizations=None):
-    """Create a PDF report with data analysis and visualizations"""
-    pdf = FPDF()
-    pdf.add_page()
-    
-    # Title
-    pdf.set_font('Arial', 'B', 16)
-    pdf.cell(0, 10, 'Data Analysis Report', ln=True, align='C')
-    pdf.ln(10)
-    
-    # Date
-    pdf.set_font('Arial', '', 10)
-    pdf.cell(0, 10, f'Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', ln=True)
-    pdf.ln(10)
-    
-    # Dataset Overview
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, '1. Dataset Overview', ln=True)
-    pdf.set_font('Arial', '', 12)
-    pdf.multi_cell(0, 10, f"""
-    Original Shape: {df.shape}
-    Cleaned Shape: {cleaned_df.shape}
-    Total Missing Values (Original): {df.isnull().sum().sum()}
-    Total Missing Values (Cleaned): {cleaned_df.isnull().sum().sum()}
-    """)
-    pdf.ln(5)
-    
-    # Data Quality Insights
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, '2. Data Quality Insights', ln=True)
-    pdf.set_font('Arial', '', 12)
-    pdf.multi_cell(0, 10, str(insights))
-    pdf.ln(5)
-    
-    # Basic Statistics
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, '3. Statistical Summary', ln=True)
-    pdf.set_font('Arial', '', 12)
-    stats_text = cleaned_df.describe().to_string()
-    pdf.multi_cell(0, 10, stats_text)
-    pdf.ln(5)
-    
-    # Visualizations
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, '4. Data Visualizations', ln=True)
-    
-    # Create and save visualizations
-    numeric_cols = cleaned_df.select_dtypes(include=['float64', 'int64']).columns
-    if len(numeric_cols) > 0:
-        # Distribution plot
-        for col in numeric_cols[:3]:  # First 3 numeric columns
-            fig = px.histogram(cleaned_df, x=col, title=f'Distribution of {col}')
-            img_path = f'temp_{col}.png'
-            fig.write_image(img_path)
-            pdf.image(img_path, x=10, w=190)
-            os.remove(img_path)  # Clean up
-    
-    # Recommendations
-    pdf.add_page()
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, '5. Recommendations & Future Improvements', ln=True)
-    pdf.set_font('Arial', '', 12)
-    recommendations = """
-    1. Data Collection Improvements:
-       - Implement data validation at entry points
-       - Establish consistent data formats
-       - Add data quality checks
-    
-    2. Feature Engineering:
-       - Create derived features
-       - Implement domain-specific transformations
-       - Consider dimensionality reduction
-    
-    3. Model Development:
-       - Test different algorithms
-       - Implement cross-validation
-       - Regular model retraining
-    
-    4. Monitoring:
-       - Set up data drift detection
-       - Monitor model performance
-       - Implement automated alerts
-    """
-    pdf.multi_cell(0, 10, recommendations)
-    
-    return pdf
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val)
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">Download Report</a>'
 
 def main():
     st.title("🧹 Data Cleaning")
@@ -189,41 +103,28 @@ def main():
                 st.write(f"- Rows: {cleaned_df.shape[0]}")
                 st.write(f"- Missing Values: {cleaned_df.isnull().sum().sum()}")
         
-        # 5. Save Cleaned Data and Generate Report
-        col1, col2 = st.columns(2)
+        # 5. Save Cleaned Data
+        if st.button("Save Cleaned Data"):
+            csv = cleaned_df.to_csv(index=False)
+            st.download_button(
+                label="Download Cleaned Dataset",
+                data=csv,
+                file_name="cleaned_dataset.csv",
+                mime="text/csv"
+            )
         
-        with col1:
-            if st.button("Save Cleaned Data"):
-                csv = cleaned_df.to_csv(index=False)
-                st.download_button(
-                    label="Download Cleaned Dataset",
-                    data=csv,
-                    file_name="cleaned_dataset.csv",
-                    mime="text/csv"
-                )
-        
-        with col2:
-            if st.button("Generate Analysis Report"):
-                with st.spinner("Generating PDF report..."):
-                    # Get insights if not already generated
-                    if 'insights' not in st.session_state:
-                        insights = get_ai_insights(df)
-                    else:
-                        insights = st.session_state.insights
-                    
-                    # Create PDF
-                    pdf = create_analysis_pdf(df, cleaned_df, insights)
-                    
-                    # Save PDF to bytes
-                    pdf_bytes = pdf.output(dest='S').encode('latin-1')
-                    
-                    # Download button for PDF
-                    st.download_button(
-                        label="Download Analysis Report",
-                        data=pdf_bytes,
-                        file_name="data_analysis_report.pdf",
-                        mime="application/pdf"
-                    )
+        # 6. Generate Report
+        st.subheader("6. Generate Report")
+        if st.button("Generate Analysis Report"):
+            with st.spinner("Generating comprehensive report..."):
+                try:
+                    report_gen = ReportGenerator(df, cleaned_df)
+                    pdf = report_gen.generate_report()
+                    html = create_download_link(pdf, "dataset_analysis_report.pdf")
+                    st.markdown(html, unsafe_allow_html=True)
+                    st.success("Report generated successfully!")
+                except Exception as e:
+                    st.error(f"Error generating report: {str(e)}")
         
         # Store cleaned data for other pages
         st.session_state['cleaned_data'] = cleaned_df
